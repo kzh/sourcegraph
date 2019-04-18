@@ -141,43 +141,48 @@ const commentSnippetCodeView: CodeViewWithSelector = {
 /**
  * The modern single file blob view.
  *
- * @todo This code view does not follow the code view contract because
- * the selector returns just the code table, not including the toolbar.
- * This requires `getToolbarMount()` to look at the parent elements, which makes it not possible
- * unit test like other toolbar mount getters.
- * Change this after https://github.com/sourcegraph/sourcegraph/issues/3271 is fixed.
  */
-export const fileLineContainerCodeView: CodeViewWithSelector = {
+export const fileLineContainerResolver: ViewResolver<ResolvedCodeView> = {
     selector: '.js-file-line-container',
-    dom: singleFileDOMFunctions,
-    getToolbarMount: (fileLineContainer: HTMLElement): HTMLElement => {
-        const codeViewParent = fileLineContainer.closest('.repository-content')
-        if (!codeViewParent) {
-            throw new Error('Repository content element not found')
+    resolveView: (fileLineContainer: HTMLElement): ResolvedCodeView | null => {
+        const { filePath } = parseURL()
+        if (!filePath) {
+            // this is not a single-file code view
+            return null
         }
-        const className = 'sourcegraph-app-annotator'
-        const existingMount = codeViewParent.querySelector(`.${className}`) as HTMLElement
-        if (existingMount) {
-            return existingMount
+        const repositoryContent = fileLineContainer.closest('.repository-content')
+        if (!repositoryContent) {
+            throw new Error('Could not find repository content element')
         }
-        const mountEl = document.createElement('div')
-        mountEl.style.display = 'inline-flex'
-        mountEl.style.verticalAlign = 'middle'
-        mountEl.style.alignItems = 'center'
-        mountEl.className = className
-        const rawURLLink = codeViewParent.querySelector('#raw-url')
-        const buttonGroup = rawURLLink && rawURLLink.closest('.BtnGroup')
-        if (!buttonGroup || !buttonGroup.parentNode) {
-            throw new Error('File actions not found')
+        return {
+            element: repositoryContent as HTMLElement,
+            dom: singleFileDOMFunctions,
+            getToolbarMount: (repositoryContent: HTMLElement): HTMLElement => {
+                const className = 'sourcegraph-app-annotator'
+                const existingMount = repositoryContent.querySelector(`.${className}`) as HTMLElement
+                if (existingMount) {
+                    return existingMount
+                }
+                const mountEl = document.createElement('div')
+                mountEl.style.display = 'inline-flex'
+                mountEl.style.verticalAlign = 'middle'
+                mountEl.style.alignItems = 'center'
+                mountEl.className = className
+                const rawURLLink = repositoryContent.querySelector('#raw-url')
+                const buttonGroup = rawURLLink && rawURLLink.closest('.BtnGroup')
+                if (!buttonGroup || !buttonGroup.parentNode) {
+                    throw new Error('File actions not found')
+                }
+                buttonGroup.parentNode.insertBefore(mountEl, buttonGroup)
+                return mountEl
+            },
+            resolveFileInfo,
+            toolbarButtonProps,
         }
-        buttonGroup.parentNode.insertBefore(mountEl, buttonGroup)
-        return mountEl
     },
-    resolveFileInfo,
-    toolbarButtonProps,
 }
 
-const codeViewSpecResolver: ViewResolver<ResolvedCodeView> = {
+const genericCodeViewResolver: ViewResolver<ResolvedCodeView> = {
     selector: '.file',
     resolveView: (elem: HTMLElement): ResolvedCodeView | null => {
         if (elem.querySelector('article.markdown-body')) {
@@ -253,8 +258,9 @@ export const createOpenOnSourcegraphIfNotExists: MountGetter = (container: HTMLE
 export const githubCodeHost: CodeHost = {
     name: 'github',
     codeViewSpecResolvers: [
-        codeViewSpecResolver,
-        ...[searchResultCodeView, commentSnippetCodeView, fileLineContainerCodeView].map(toCodeViewResolver),
+        genericCodeViewResolver,
+        fileLineContainerResolver,
+        ...[searchResultCodeView, commentSnippetCodeView].map(toCodeViewResolver),
     ],
     contentViewResolvers: [markdownBodyViewResolver],
     textFieldResolvers: [commentTextFieldResolver],
