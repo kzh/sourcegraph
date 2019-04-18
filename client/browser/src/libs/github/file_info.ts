@@ -65,7 +65,8 @@ export const resolveDiffFileInfo = (codeView: HTMLElement): Observable<FileInfo>
         }))
     )
 
-export const resolveFileInfo = (): Observable<FileInfo> => {
+export const resolveFileInfo = (codeView: HTMLElement): Observable<FileInfo> => {
+    console.log(codeView)
     const { repoName, filePath, rev } = parseURL()
     if (!filePath) {
         return throwError(

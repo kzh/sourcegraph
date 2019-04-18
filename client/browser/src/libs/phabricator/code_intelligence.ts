@@ -6,7 +6,7 @@ import { convertSpacesToTabs, spacesToTabsAdjustment } from '.'
 import { FileSpec, RepoSpec, ResolvedRevSpec, RevSpec } from '../../../../../shared/src/util/url'
 import { fetchBlobContentLines } from '../../shared/repo/backend'
 import { CodeHost } from '../code_intelligence'
-import { CodeViewSpec, CodeViewSpecResolver } from '../code_intelligence/code_views'
+import { CodeView, CodeViewWithSelector, ResolvedCodeView, toCodeViewResolver } from '../code_intelligence/code_views'
 import { ViewResolver } from '../code_intelligence/views'
 import { diffDomFunctions, diffusionDOMFns } from './dom_functions'
 import { resolveDiffFileInfo, resolveDiffusionFileInfo, resolveRevisionFileInfo } from './file_info'
@@ -80,7 +80,7 @@ const adjustPosition: PositionAdjuster<RepoSpec & RevSpec & FileSpec & ResolvedR
 const toolbarButtonProps = {
     className: 'button grey button-grey has-icon has-text phui-button-default msl',
 }
-const commitCodeView: CodeViewSpecResolver = {
+const commitCodeView: CodeView = {
     dom: diffDomFunctions,
     resolveFileInfo: resolveRevisionFileInfo,
     adjustPosition,
@@ -99,7 +99,6 @@ const commitCodeView: CodeViewSpecResolver = {
         return mount
     },
     toolbarButtonProps,
-    isDiff: true,
 }
 
 export const diffCodeView = {
@@ -126,17 +125,17 @@ export const diffCodeView = {
     isDiff: true,
 }
 
-const codeViewSpecResolver: ViewResolver<CodeViewSpecResolver> = {
+const codeViewSpecResolver: ViewResolver<ResolvedCodeView> = {
     selector: '.differential-changeset',
-    resolveView: (codeView: HTMLElement): CodeViewSpecResolver => {
+    resolveView: (element: HTMLElement): ResolvedCodeView => {
         if (window.location.pathname.match(/^\/r/)) {
-            return commitCodeView
+            return { element, ...commitCodeView }
         }
-        return diffCodeView
+        return { element, ...diffCodeView }
     },
 }
 
-const phabCodeViews: CodeViewSpec[] = [
+const phabCodeViews: CodeViewWithSelector[] = [
     {
         // TODO this code view does not include the toolbar,
         // which makes it not possible to test getToolbarMount()
@@ -159,15 +158,13 @@ const phabCodeViews: CodeViewSpec[] = [
             return mount
         },
         toolbarButtonProps,
-        isDiff: false,
     },
 ]
 
 export const checkIsPhabricator = () => !!document.querySelector('.phabricator-wordmark')
 
 export const phabricatorCodeHost: CodeHost = {
-    codeViewSpecs: phabCodeViews,
-    codeViewSpecResolver,
+    codeViewSpecResolvers: phabCodeViews.map(toCodeViewResolver).concat(codeViewSpecResolver),
     name: 'phabricator',
     check: checkIsPhabricator,
 

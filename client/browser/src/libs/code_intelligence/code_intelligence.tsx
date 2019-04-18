@@ -76,7 +76,7 @@ import { bitbucketServerCodeHost } from '../bitbucket/code_intelligence'
 import { githubCodeHost } from '../github/code_intelligence'
 import { gitlabCodeHost } from '../gitlab/code_intelligence'
 import { phabricatorCodeHost } from '../phabricator/code_intelligence'
-import { CodeViewSpec, CodeViewSpecResolver, fetchFileContents, trackCodeViews } from './code_views'
+import { fetchFileContents, ResolvedCodeView, trackCodeViews } from './code_views'
 import { ContentView, handleContentViews } from './content_views'
 import { applyDecorations, initializeExtensions, renderCommandPalette, renderGlobalDebug } from './extensions'
 import { renderViewContextOnSourcegraph, ViewOnSourcegraphButtonClassProps } from './external_links'
@@ -148,7 +148,7 @@ export interface CodeHost extends ApplyLinkPreviewOptions {
      *
      * The set of code views tracked on a page is the union of all code views found using `codeViewSpecs` and `codeViewResolver`.
      */
-    codeViewSpecs?: CodeViewSpec[]
+    // codeViewSpecs?: CodeViewSpec[]
 
     /**
      * Resolve `CodeView`s from the DOM. This is useful when each code view type
@@ -156,7 +156,7 @@ export interface CodeHost extends ApplyLinkPreviewOptions {
      *
      * The set of code views tracked on a page is the union of all code views found using `codeViewSpecs` and `codeViewResolver`.
      */
-    codeViewSpecResolver?: ViewResolver<CodeViewSpecResolver>
+    codeViewSpecResolvers: ViewResolver<ResolvedCodeView>[]
 
     /**
      * Resolve {@link ContentView}s from the DOM.
@@ -466,20 +466,21 @@ export function handleCodeHost({
     /** A stream of added or removed code views */
     const codeViews = mutations.pipe(
         trackCodeViews(codeHost),
-        mergeMap(codeViewEvent =>
-            codeViewEvent.type === 'added'
-                ? codeViewEvent.resolveFileInfo(codeViewEvent.element).pipe(
-                      mergeMap(fileInfo =>
-                          fetchFileContents(fileInfo).pipe(
-                              map(fileInfoWithContents => ({
-                                  fileInfo: fileInfoWithContents,
-                                  ...codeViewEvent,
-                              }))
-                          )
-                      )
-                  )
-                : [codeViewEvent]
-        ),
+        mergeMap(codeViewEvent => {
+            if (codeViewEvent.type === 'added') {
+                return codeViewEvent.resolveFileInfo(codeViewEvent.element).pipe(
+                    mergeMap(fileInfo =>
+                        fetchFileContents(fileInfo).pipe(
+                            map(fileInfoWithContents => ({
+                                fileInfo: fileInfoWithContents,
+                                ...codeViewEvent,
+                            }))
+                        )
+                    )
+                )
+            }
+            return [codeViewEvent]
+        }),
         catchError(err => {
             if (err.name === ERPRIVATEREPOPUBLICSOURCEGRAPHCOM) {
                 return EMPTY
@@ -686,7 +687,7 @@ export function handleCodeHost({
 
 const SHOW_DEBUG = () => localStorage.getItem('debug') !== null
 
-const CODE_HOSTS = [bitbucketServerCodeHost, githubCodeHost, gitlabCodeHost, phabricatorCodeHost]
+const CODE_HOSTS: CodeHost[] = [bitbucketServerCodeHost, githubCodeHost, gitlabCodeHost, phabricatorCodeHost]
 export const determineCodeHost = (): CodeHost | undefined => CODE_HOSTS.find(codeHost => codeHost.check())
 
 export async function injectCodeIntelligenceToCodeHost(
